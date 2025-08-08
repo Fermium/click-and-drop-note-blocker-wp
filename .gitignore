@@ -1,25 +1,33 @@
-# CakePHP 3
+# WordPress Plugin Development
 
-/vendor/*
-/config/app.php
+# Build artifacts
+build/
+*.zip
+dist/
 
-/tmp/cache/models/*
-!/tmp/cache/models/empty
-/tmp/cache/persistent/*
-!/tmp/cache/persistent/empty
-/tmp/cache/views/*
-!/tmp/cache/views/empty
-/tmp/sessions/*
-!/tmp/sessions/empty
-/tmp/tests/*
-!/tmp/tests/empty
+# Development files
+.DS_Store
+Thumbs.db
+*.log
 
-/logs/*
-!/logs/empty
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# CakePHP 2
+# Node.js (if using for build tools)
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
 
-/app/tmp/*
-/app/Config/core.php
-/app/Config/database.php
-/vendors/*
+# PHP
+vendor/
+composer.lock
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
