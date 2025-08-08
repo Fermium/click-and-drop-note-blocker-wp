@@ -3,7 +3,7 @@
  * Plugin Name: Royal Mail Note Blocker
  * Plugin URI: https://github.com/Fermium/click-and-drop-note-blocker-wp
  * Description: Prevents Royal Mail tracking notes from being sent to customers as email notifications in WooCommerce.
- * Version: 1.0.0
+ * Version: 0.1.0
  * Author: Fermium
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('RMNB_VERSION', '1.0.0');
+define('RMNB_VERSION', '0.1.0');
 define('RMNB_PLUGIN_FILE', __FILE__);
 define('RMNB_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RMNB_PLUGIN_URL', plugin_dir_url(__FILE__));

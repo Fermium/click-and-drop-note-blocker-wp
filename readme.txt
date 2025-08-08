@@ -4,7 +4,7 @@ Tags: woocommerce, royal mail, order notes, email, tracking
 Requires at least: 5.0
 Tested up to: 6.3
 Requires PHP: 7.4
-Stable tag: 1.0.0
+Stable tag: 0.1.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -61,7 +61,7 @@ Yes, enable debug mode in the settings to log blocked notes to the WordPress deb
 
 == Changelog ==
 
-= 1.0.0 =
+= 0.1.0 =
 * Initial release
 * Basic keyword blocking functionality
 * Admin settings panel
@@ -69,5 +69,5 @@ Yes, enable debug mode in the settings to log blocked notes to the WordPress deb
 
 == Upgrade Notice ==
 
-= 1.0.0 =
+= 0.1.0 =
 Initial release of Royal Mail Note Blocker plugin.
