@@ -4,7 +4,7 @@ Tags: woocommerce, royal mail, order notes, email, tracking
 Requires at least: 5.0
 Tested up to: 6.3
 Requires PHP: 7.4
-Stable tag: 0.2.0
+Stable tag: 0.3.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -61,6 +61,13 @@ Yes, enable debug mode in the settings to log blocked notes to the WordPress deb
 
 == Changelog ==
 
+= 0.3.0 =
+* Enhanced email blocking with triple-layer protection
+* Added direct email notification prevention hook
+* Improved note modification with additional safeguards
+* Enhanced debug logging for better troubleshooting
+* Fixed email bypass issues with robust blocking methods
+
 = 0.2.0 =
 * Changed logic to require ALL keywords to be present (AND logic instead of OR)
 * Moved settings to WooCommerce submenu for less prominent placement
@@ -75,6 +82,9 @@ Yes, enable debug mode in the settings to log blocked notes to the WordPress deb
 * Debug mode support
 
 == Upgrade Notice ==
+
+= 0.3.0 =
+Enhanced email blocking reliability. Fixes issues where emails were still sent despite note blocking.
 
 = 0.2.0 =
 Important: Logic changed to require ALL keywords. Settings moved to WooCommerce → Note Blocker.

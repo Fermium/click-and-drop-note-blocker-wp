@@ -3,7 +3,7 @@
  * Plugin Name: Royal Mail Note Blocker
  * Plugin URI: https://github.com/Fermium/click-and-drop-note-blocker-wp
  * Description: Prevents Royal Mail tracking notes from being sent to customers as email notifications in WooCommerce.
- * Version: 0.2.0
+ * Version: 0.3.0
  * Author: Fermium
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('RMNB_VERSION', '0.2.0');
+define('RMNB_VERSION', '0.3.0');
 define('RMNB_PLUGIN_FILE', __FILE__);
 define('RMNB_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RMNB_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -52,6 +52,12 @@ class Royal_Mail_Note_Blocker {
         // Add the filter to prevent Royal Mail note emails
         add_filter('woocommerce_new_order_note_data', array($this, 'prevent_royal_mail_note_emails'), 10, 2);
         
+        // Additional hook to catch notes that might slip through
+        add_action('woocommerce_order_note_added', array($this, 'check_note_after_creation'), 10, 2);
+        
+        // Hook to prevent email notifications
+        add_filter('woocommerce_email_enabled_customer_note', array($this, 'maybe_disable_customer_note_email'), 10, 2);
+        
         // Add admin hooks
         add_action('admin_menu', array($this, 'add_admin_menu'));
         add_action('admin_init', array($this, 'register_settings'));
@@ -65,6 +71,12 @@ class Royal_Mail_Note_Blocker {
      * @return array Modified note data
      */
     public function prevent_royal_mail_note_emails($note_data, $order) {
+        // Debug logging
+        if (get_option('rmnb_debug_mode', false)) {
+            error_log('Royal Mail Note Blocker: Processing note for order #' . $order->get_id());
+            error_log('Royal Mail Note Blocker: Note content: ' . $note_data['comment_content']);
+        }
+        
         // Get plugin settings
         $keywords = get_option('rmnb_keywords', array(
             'despatched via Royal Mail',
@@ -89,18 +101,126 @@ class Royal_Mail_Note_Blocker {
         
         // Only block if ALL keywords are present
         if ($all_keywords_found && count($found_keywords) === count($keywords) && count($keywords) > 0) {
-            // Set as private note (no customer email)
+            // Set as private note (no customer email) - multiple approaches
             $note_data['comment_agent'] = 'private';
+            $note_data['comment_approved'] = 0; // Mark as not approved
+            
+            // Ensure comment_meta exists
+            if (!isset($note_data['comment_meta'])) {
+                $note_data['comment_meta'] = array();
+            }
             $note_data['comment_meta']['is_customer_note'] = 0;
+            
+            // Additional WooCommerce specific fields
+            $note_data['comment_type'] = 'order_note';
+            $note_data['comment_parent'] = 0;
             
             // Log the action if debug mode is enabled
             if (get_option('rmnb_debug_mode', false)) {
-                error_log('Royal Mail Note Blocker: Blocked note for order #' . $order->get_id() . ' - All keywords found: ' . implode(', ', $found_keywords));
+                error_log('Royal Mail Note Blocker: BLOCKED note for order #' . $order->get_id() . ' - All keywords found: ' . implode(', ', $found_keywords));
+                error_log('Royal Mail Note Blocker: Note data after modification: ' . print_r($note_data, true));
             }
         }
         
         return $note_data;
     }
+    
+    /**
+     * Additional check after note is created (backup method)
+     * 
+     * @param int $note_id The note ID
+     * @param WC_Order $order The order object
+     */
+    public function check_note_after_creation($note_id, $order) {
+        // Get the note
+        $note = get_comment($note_id);
+        if (!$note) {
+            return;
+        }
+        
+        // Get plugin settings
+        $keywords = get_option('rmnb_keywords', array(
+            'despatched via Royal Mail',
+            'tracking number is',
+            'royalmail.com/portal/rm/track'
+        ));
+        
+        // Check if note contains any keywords
+        $note_content = strtolower($note->comment_content);
+        
+        foreach ($keywords as $keyword) {
+            $keyword_trimmed = strtolower(trim($keyword));
+            if (stripos($note_content, $keyword_trimmed) !== false) {
+                // Update the note to be private if it wasn't caught earlier
+                if (get_comment_meta($note_id, 'is_customer_note', true) == 1) {
+                    update_comment_meta($note_id, 'is_customer_note', 0);
+                    
+                    // Log the late catch
+                    if (get_option('rmnb_debug_mode', false)) {
+                        error_log('Royal Mail Note Blocker: Late catch - Updated note #' . $note_id . ' to private after creation');
+                    }
+                }
+                break;
+            }
+        }
+    }
+    
+    /**
+     * Prevent customer note emails for blocked notes
+     * 
+     * @param bool $enabled Whether the email is enabled
+     * @param WC_Order $order The order object
+     * @return bool
+     */
+    public function maybe_disable_customer_note_email($enabled, $order) {
+        if (!$enabled) {
+            return false;
+        }
+        
+        // Get the most recent note
+        $notes = wc_get_order_notes(array(
+            'order_id' => $order->get_id(),
+            'limit' => 1,
+            'orderby' => 'date_created',
+            'order' => 'DESC'
+        ));
+        
+        if (empty($notes)) {
+            return $enabled;
+        }
+        
+        $latest_note = $notes[0];
+        
+        // Get plugin settings
+        $keywords = get_option('rmnb_keywords', array(
+            'despatched via Royal Mail',
+            'tracking number is',
+            'royalmail.com/portal/rm/track'
+        ));
+        
+        // Check if the latest note contains ALL keywords
+        $note_content = strtolower($latest_note->content);
+        $all_keywords_found = true;
+        $found_keywords = array();
+        
+        foreach ($keywords as $keyword) {
+            $keyword_trimmed = strtolower(trim($keyword));
+            if (stripos($note_content, $keyword_trimmed) !== false) {
+                $found_keywords[] = $keyword;
+            } else {
+                $all_keywords_found = false;
+                break;
+            }
+        }
+        
+        if ($all_keywords_found && count($found_keywords) === count($keywords) && count($keywords) > 0) {
+            if (get_option('rmnb_debug_mode', false)) {
+                error_log('Royal Mail Note Blocker: Disabled customer note email for order #' . $order->get_id());
+            }
+            return false; // Disable the email
+        }
+        
+        return $enabled;
     
     /**
      * Show admin notice if WooCommerce is not active
