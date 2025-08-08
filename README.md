@@ -4,7 +4,7 @@ A WordPress plugin that prevents Royal Mail tracking notes from being sent to cu
 
 ## Description
 
-This plugin automatically blocks order notes containing Royal Mail tracking information from being sent to customers via email. When a note containing specific Royal Mail keywords is added to an order, it's automatically marked as a private note instead of a customer note.
+This plugin automatically blocks order notes containing Royal Mail tracking information from being sent to customers via email. When a note containing all the specified Royal Mail keywords is added to an order, it's automatically marked as a private note instead of a customer note.
 
 ## Features
 
@@ -16,10 +16,9 @@ This plugin automatically blocks order notes containing Royal Mail tracking info
 
 ## Installation
 
-1. Download the plugin files
-2. Upload the `royal-mail-note-blocker.php` file to your `/wp-content/plugins/` directory
-3. Activate the plugin through the 'Plugins' menu in WordPress
-4. Configure settings under 'Settings' → 'Royal Mail Note Blocker'
+1. Upload the plugin files to the `/wp-content/plugins/royal-mail-note-blocker/` directory, or install the plugin through the WordPress plugins screen directly.
+2. Activate the plugin through the 'Plugins' screen in WordPress
+3. Use the WooCommerce->Note Blocker screen to configure the plugin
 
 ## Requirements
 
@@ -38,14 +37,14 @@ The plugin comes pre-configured to block notes containing:
 
 After activation, you can customize the plugin settings:
 
-1. Go to **Settings** → **Royal Mail Note Blocker**
+1. Go to **WooCommerce** → **Note Blocker**
 2. Edit the list of keywords to block (one per line)
 3. Enable debug mode if needed for troubleshooting
 4. Save your changes
 
 ## How It Works
 
-The plugin uses the `woocommerce_new_order_note_data` filter to intercept order notes before they're saved. When a note contains any of the configured keywords, the plugin:
+The plugin uses the `woocommerce_new_order_note_data` filter to intercept order notes before they're saved. When a note contains all of the configured keywords, the plugin:
 
 1. Sets the note as "private" (`comment_agent = 'private'`)
 2. Marks it as not a customer note (`is_customer_note = 0`)
