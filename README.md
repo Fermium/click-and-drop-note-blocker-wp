@@ -1,17 +1,19 @@
 # Royal Mail Note Blocker - WordPress Plugin
 
-A WordPress plugin that prevents Royal Mail tracking notes from being sent to customers as email notifications in WooCommerce.
+A WordPress plugin that prevents Royal Mail tracking notes from being sent to customers as email notifications in WooCommerce, with advanced email management features.
 
 ## Description
 
-This plugin automatically blocks order notes containing Royal Mail tracking information from being sent to customers via email. When a note containing all the specified Royal Mail keywords is added to an order, it's automatically marked as a private note instead of a customer note.
+This plugin provides comprehensive email management for WooCommerce orders, specifically targeting Royal Mail tracking communications. It can block order notes containing Royal Mail tracking information and optionally suppress completed order emails when no tracking information is available.
 
 ## Features
 
-- **Automatic Detection**: Scans order notes for Royal Mail tracking keywords
-- **Configurable Keywords**: Admin panel to customize blocked keywords
+- **Royal Mail Note Blocking**: Automatically blocks order notes containing Royal Mail tracking keywords
+- **Email Interception**: Direct email blocking before sending (more reliable than note modification)
+- **AST Integration**: Suppress completed order emails when no tracking info exists (requires Advanced Shipment Tracking plugin)
+- **Configurable Keywords**: Admin panel to customize blocked keywords with AND logic (all keywords must be present)
 - **Debug Mode**: Optional logging for troubleshooting
-- **WooCommerce Integration**: Seamlessly integrates with WooCommerce order notes
+- **WooCommerce Integration**: Seamlessly integrates with WooCommerce email system
 - **Privacy Focused**: Prevents accidental sharing of tracking information
 
 ## Installation
@@ -40,40 +42,81 @@ After activation, you can customize the plugin settings:
 1. Go to **WooCommerce** → **Note Blocker**
 2. Edit the list of keywords to block (one per line)
 3. Enable debug mode if needed for troubleshooting
-4. Save your changes
+4. **NEW**: Enable AST integration to suppress completed order emails without tracking
+5. Save your changes
+
+## Advanced Features
+
+### AST (Advanced Shipment Tracking) Integration
+When enabled, this feature works with the Advanced Shipment Tracking plugin to suppress completed order emails if no tracking information has been added to the order. This prevents customers from receiving completion emails for orders that haven't been shipped yet.
 
 ## How It Works
 
-The plugin uses the `woocommerce_new_order_note_data` filter to intercept order notes before they're saved. When a note contains all of the configured keywords, the plugin:
+The plugin operates on two levels:
 
-1. Sets the note as "private" (`comment_agent = 'private'`)
-2. Marks it as not a customer note (`is_customer_note = 0`)
+### 1. Email Interception (Primary Method)
+Uses the `woocommerce_email_enabled` filter to block emails before they're sent when Royal Mail tracking content is detected in order notes.
+
+### 2. AST Integration (Optional)
+When enabled, uses the `woocommerce_email_enabled_customer_completed_order` filter to suppress completed order emails when no tracking items exist.
 3. Optionally logs the action (if debug mode is enabled)
 
 ## Code Example
 
-The core functionality is based on this filter:
+The core functionality is based on email interception:
 
 ```php
-add_filter('woocommerce_new_order_note_data', 'prevent_royal_mail_note_emails', 10, 2);
-function prevent_royal_mail_note_emails($note_data, $order) {
-    // Check if the note contains Royal Mail tracking content
-    if (stripos($note_data['comment_content'], 'despatched via Royal Mail') !== false || 
-        stripos($note_data['comment_content'], 'tracking number is') !== false ||
-        stripos($note_data['comment_content'], 'royalmail.com/portal/rm/track') !== false) {
-        
-        // Set as private note (no customer email)
-        $note_data['comment_agent'] = 'private';
-        $note_data['comment_meta']['is_customer_note'] = 0;
+add_filter('woocommerce_email_enabled', array($this, 'maybe_block_email'), 10, 3);
+
+public function maybe_block_email($enabled, $email_id, $order) {
+    if (!$enabled || !$order) {
+        return $enabled;
     }
     
-    return $note_data;
+    // Get all notes for this order
+    $notes = wc_get_order_notes(array('order_id' => $order->get_id()));
+    $keywords = get_option('rmnb_keywords', array());
+    
+    foreach ($notes as $note) {
+        $all_keywords_found = true;
+        foreach ($keywords as $keyword) {
+            if (stripos($note->content, trim($keyword)) === false) {
+                $all_keywords_found = false;
+                break;
+            }
+        }
+        
+        if ($all_keywords_found) {
+            return false; // Block the email
+        }
+    }
+    
+    return $enabled;
 }
 ```
 
 ## Changelog
 
-### 1.0.0
+### 0.5.0
+- Added AST (Advanced Shipment Tracking) integration
+- Added option to suppress completed order emails without tracking
+- Enhanced admin interface with new settings
+- Improved reliability with direct email interception
+
+### 0.4.0
+- Simplified to direct email interception method
+- Improved reliability and performance
+- Enhanced debugging capabilities
+
+### 0.3.0
+- Changed logic to require ALL keywords (AND logic instead of OR)
+- Improved keyword matching accuracy
+
+### 0.2.0
+- Added CI/CD pipeline
+- Enhanced build process
+
+### 0.1.0
 - Initial release
 - Basic keyword blocking functionality
 - Admin settings panel

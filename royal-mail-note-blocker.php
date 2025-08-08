@@ -3,7 +3,7 @@
  * Plugin Name: Royal Mail Note Blocker
  * Plugin URI: https://github.com/Fermium/click-and-drop-note-blocker-wp
  * Description: Prevents Royal Mail tracking notes from being sent to customers as email notifications in WooCommerce.
- * Version: 0.4.0
+ * Version: 0.5.0
  * Author: Fermium
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -22,7 +22,7 @@ if (!defined('ABSPATH')) {
 }
 
 // Define plugin constants
-define('RMNB_VERSION', '0.4.0');
+define('RMNB_VERSION', '0.5.0');
 define('RMNB_PLUGIN_FILE', __FILE__);
 define('RMNB_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RMNB_PLUGIN_URL', plugin_dir_url(__FILE__));
@@ -51,6 +51,16 @@ class Royal_Mail_Note_Blocker {
         
         // Intercept customer note emails directly
         add_filter('woocommerce_email_enabled_customer_note', array($this, 'maybe_block_email'), 10, 2);
+        
+        // Optionally block completed order emails without tracking
+        if (get_option('rmnb_block_emails', true)) {
+            add_filter('woocommerce_email_enabled', array($this, 'maybe_block_email'), 10, 3);
+        }
+        
+        // Hook for AST tracking email suppression if enabled
+        if (get_option('rmnb_disable_no_tracking_emails', false)) {
+            add_filter('woocommerce_email_enabled_customer_completed_order', array($this, 'disable_completed_email_without_tracking'), 10, 3);
+        }
         
         // Add admin hooks
         add_action('admin_menu', array($this, 'add_admin_menu'));
@@ -118,6 +128,34 @@ class Royal_Mail_Note_Blocker {
     }
     
     /**
+     * Disable completed order emails if no tracking info is available
+     *
+     * @param bool $enabled Whether the email is enabled
+     * @param int $order_id The order ID
+     * @param WC_Order $order The order object
+     * @return bool
+     */
+    public function disable_completed_email_without_tracking($enabled, $order_id, $order) {
+        if (!$enabled) {
+            return false;
+        }
+        
+        // Check if Advanced Shipment Tracking plugin is active
+        if (function_exists('ast_get_tracking_items')) {
+            $tracking_items = ast_get_tracking_items($order_id);
+            if (empty($tracking_items) || !is_array($tracking_items)) {
+                // Log the blocked email if debug mode is enabled
+                if (get_option('rmnb_debug_mode', false)) {
+                    error_log('Royal Mail Note Blocker: Blocked completed order email for order #' . $order_id . ' - No tracking items found');
+                }
+                return false; // Suppress email if no tracking info
+            }
+        }
+        
+        return $enabled;
+    }
+    
+    /**
      * Show admin notice if WooCommerce is not active
      */
     public function woocommerce_missing_notice() {
@@ -159,6 +197,11 @@ class Royal_Mail_Note_Blocker {
             'default' => false
         ));
         
+        register_setting('rmnb_settings', 'rmnb_disable_no_tracking_emails', array(
+            'type' => 'boolean',
+            'default' => false
+        ));
+        
         // Add settings section
         add_settings_section(
             'rmnb_main_section',
@@ -180,6 +223,14 @@ class Royal_Mail_Note_Blocker {
             'rmnb_debug_mode',
             __('Debug Mode', 'royal-mail-note-blocker'),
             array($this, 'debug_field_callback'),
+            'rmnb_settings',
+            'rmnb_main_section'
+        );
+        
+        add_settings_field(
+            'rmnb_disable_no_tracking_emails',
+            __('Disable Completed Order Emails Without Tracking', 'royal-mail-note-blocker'),
+            array($this, 'disable_no_tracking_field_callback'),
             'rmnb_settings',
             'rmnb_main_section'
         );
@@ -229,6 +280,20 @@ class Royal_Mail_Note_Blocker {
         <label for="rmnb_debug_mode"><?php echo __('Enable debug logging', 'royal-mail-note-blocker'); ?></label>
         <p class="description">
             <?php echo __('When enabled, blocked emails will be logged to the WordPress debug log.', 'royal-mail-note-blocker'); ?>
+        </p>
+        <?php
+    }
+    
+    /**
+     * Disable no tracking emails field callback
+     */
+    public function disable_no_tracking_field_callback() {
+        $disable_emails = get_option('rmnb_disable_no_tracking_emails', false);
+        ?>
+        <input type="checkbox" id="rmnb_disable_no_tracking_emails" name="rmnb_disable_no_tracking_emails" value="1" <?php checked($disable_emails); ?> />
+        <label for="rmnb_disable_no_tracking_emails"><?php echo __('Disable completed order emails when no tracking info is available', 'royal-mail-note-blocker'); ?></label>
+        <p class="description">
+            <?php echo __('When enabled and the Advanced Shipment Tracking plugin is active, completed order emails will be suppressed if no tracking information exists for the order.', 'royal-mail-note-blocker'); ?>
         </p>
         <?php
     }
