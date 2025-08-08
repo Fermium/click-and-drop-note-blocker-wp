@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    name: Validate Plugin
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup PHP
+      uses: shivammathur/setup-php@v2
+      with:
+        php-version: '8.1'
+        extensions: mbstring, xml, ctype, json
+        tools: composer
+        
+    - name: Validate PHP syntax
+      run: |
+        find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; | grep -v "No syntax errors"
+        
+    - name: Check plugin header
+      run: |
+        if ! grep -q "Plugin Name:" royal-mail-note-blocker.php; then
+          echo "Error: Plugin header not found"
+          exit 1
+        fi
+        echo "Plugin header validation passed"
+        
+    - name: Extract plugin version
+      id: version
+      run: |
+        VERSION=$(grep "Version:" royal-mail-note-blocker.php | sed 's/.*Version: *\([0-9.]*\).*/\1/')
+        if [ -z "$VERSION" ]; then
+          echo "Error: Could not extract version"
+          exit 1
+        fi
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Plugin version: $VERSION"
+        
+    - name: Validate readme.txt
+      run: |
+        if [ ! -f readme.txt ]; then
+          echo "Error: readme.txt not found"
+          exit 1
+        fi
+        
+        # Check if version in readme.txt matches plugin file
+        README_VERSION=$(grep "Stable tag:" readme.txt | sed 's/.*Stable tag: *\([0-9.]*\).*/\1/')
+        if [ "$README_VERSION" != "${{ steps.version.outputs.version }}" ]; then
+          echo "Warning: Version mismatch between plugin (${{ steps.version.outputs.version }}) and readme.txt ($README_VERSION)"
+        fi
+        echo "readme.txt validation passed"
+        
+    - name: Check required files
+      run: |
+        REQUIRED_FILES=("royal-mail-note-blocker.php" "readme.txt" "LICENSE" "uninstall.php")
+        for file in "${REQUIRED_FILES[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "Error: Required file $file not found"
+            exit 1
+          fi
+        done
+        echo "All required files present"
+        
+    - name: Test plugin structure
+      run: |
+        # Create test build
+        mkdir -p test-build/royal-mail-note-blocker
+        cp royal-mail-note-blocker.php test-build/royal-mail-note-blocker/
+        cp readme.txt test-build/royal-mail-note-blocker/
+        cp LICENSE test-build/royal-mail-note-blocker/
+        cp uninstall.php test-build/royal-mail-note-blocker/
+        cp index.php test-build/royal-mail-note-blocker/
+        
+        # Create test zip
+        cd test-build
+        zip -r ../royal-mail-note-blocker-test.zip royal-mail-note-blocker/
+        cd ..
+        
+        # Verify zip contents
+        unzip -l royal-mail-note-blocker-test.zip
+        
+        echo "Plugin build test completed successfully"
+        
+    - name: Upload test build
+      uses: actions/upload-artifact@v4
+      with:
+        name: plugin-test-build-${{ github.sha }}
+        path: royal-mail-note-blocker-test.zip
+        retention-days: 7
+
+  security-scan:
+    runs-on: ubuntu-latest
+    name: Security Scan
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Check for common security issues
+      run: |
+        echo "Scanning for potential security issues..."
+        
+        # Check for direct access protection
+        if ! grep -q "defined('ABSPATH')" royal-mail-note-blocker.php; then
+          echo "Warning: Main plugin file should check for ABSPATH"
+        fi
+        
+        # Check for SQL injection patterns (basic check)
+        if grep -r "\$_GET\|\$_POST\|\$_REQUEST" --include="*.php" . | grep -v "isset\|empty\|sanitize\|escape"; then
+          echo "Warning: Potential unsanitized user input detected"
+        fi
+        
+        # Check for XSS patterns
+        if grep -r "echo \$\|print \$" --include="*.php" . | grep -v "esc_\|wp_kses"; then
+          echo "Warning: Potential XSS vulnerability - unescaped output detected"
+        fi
+        
+        echo "Security scan completed"

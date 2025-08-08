@@ -1,0 +1,115 @@
+name: Build Development Snapshot
+
+on:
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create a pre-release'
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  build-snapshot:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Get current date
+      id: date
+      run: |
+        DATE=$(date +'%Y%m%d-%H%M%S')
+        echo "date=$DATE" >> $GITHUB_OUTPUT
+        
+    - name: Get plugin version
+      id: version
+      run: |
+        VERSION=$(grep "Version:" royal-mail-note-blocker.php | sed 's/.*Version: *\([0-9.]*\).*/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        
+    - name: Get short commit hash
+      id: commit
+      run: |
+        SHORT_SHA=$(git rev-parse --short HEAD)
+        echo "short_sha=$SHORT_SHA" >> $GITHUB_OUTPUT
+        
+    - name: Create development build
+      run: |
+        # Create build directory
+        mkdir -p royal-mail-note-blocker-dev
+        
+        # Copy files
+        cp royal-mail-note-blocker.php royal-mail-note-blocker-dev/
+        cp readme.txt royal-mail-note-blocker-dev/
+        cp LICENSE royal-mail-note-blocker-dev/
+        cp uninstall.php royal-mail-note-blocker-dev/
+        cp index.php royal-mail-note-blocker-dev/
+        
+        # Modify plugin version to include dev info
+        sed -i "s/Version: ${{ steps.version.outputs.version }}/Version: ${{ steps.version.outputs.version }}-dev-${{ steps.date.outputs.date }}/" royal-mail-note-blocker-dev/royal-mail-note-blocker.php
+        
+        # Add development notice to plugin
+        sed -i "/Description:/a\\
+        \\n * **DEVELOPMENT BUILD** - This is a development snapshot from commit ${{ steps.commit.outputs.short_sha }}\\
+         * Built on: $(date)\\
+         * Not recommended for production use." royal-mail-note-blocker-dev/royal-mail-note-blocker.php
+        
+        # Create development readme
+        cat > royal-mail-note-blocker-dev/DEV-README.txt << EOF
+        DEVELOPMENT BUILD
+        =================
+        
+        This is a development snapshot of Royal Mail Note Blocker.
+        
+        Build Information:
+        - Version: ${{ steps.version.outputs.version }}-dev-${{ steps.date.outputs.date }}
+        - Commit: ${{ steps.commit.outputs.short_sha }}
+        - Built: $(date)
+        
+        WARNING: This is a development build and should not be used in production!
+        
+        For stable releases, visit:
+        https://github.com/Fermium/click-and-drop-note-blocker-wp/releases
+        EOF
+        
+    - name: Create snapshot zip
+      run: |
+        ZIP_NAME="royal-mail-note-blocker-dev-${{ steps.date.outputs.date }}-${{ steps.commit.outputs.short_sha }}.zip"
+        zip -r "$ZIP_NAME" royal-mail-note-blocker-dev/
+        echo "ZIP_NAME=$ZIP_NAME" >> $GITHUB_ENV
+        
+    - name: Upload development build
+      uses: actions/upload-artifact@v4
+      with:
+        name: development-build-${{ steps.date.outputs.date }}
+        path: ${{ env.ZIP_NAME }}
+        retention-days: 14
+        
+    - name: Create pre-release
+      if: ${{ github.event.inputs.create_release == 'true' }}
+      uses: actions/create-release@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: dev-${{ steps.date.outputs.date }}
+        release_name: Development Snapshot ${{ steps.date.outputs.date }}
+        body: |
+          ## Development Snapshot
+          
+          **⚠️ WARNING: This is a development build - not recommended for production use!**
+          
+          ### Build Information
+          - Base Version: ${{ steps.version.outputs.version }}
+          - Commit: ${{ steps.commit.outputs.short_sha }}
+          - Built: ${{ steps.date.outputs.date }}
+          
+          ### Installation
+          1. Download the zip file below
+          2. Upload to WordPress via Plugins > Add New > Upload Plugin
+          3. Test in a development environment only
+          
+          For stable releases, visit: [Releases](https://github.com/Fermium/click-and-drop-note-blocker-wp/releases)
+        draft: false
+        prerelease: true

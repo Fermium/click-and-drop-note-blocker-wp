@@ -1,0 +1,59 @@
+name: Build Plugin
+
+on:
+  push:
+    branches: [ main ]
+    tags: [ 'v*' ]
+  pull_request:
+    branches: [ main ]
+  release:
+    types: [ created ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Get plugin version
+      id: version
+      run: |
+        VERSION=$(grep "Version:" royal-mail-note-blocker.php | sed 's/.*Version: *\([0-9.]*\).*/\1/')
+        echo "version=$VERSION" >> $GITHUB_OUTPUT
+        echo "Plugin version: $VERSION"
+        
+    - name: Create plugin directory
+      run: |
+        mkdir -p royal-mail-note-blocker
+        
+    - name: Copy plugin files
+      run: |
+        cp royal-mail-note-blocker.php royal-mail-note-blocker/
+        cp readme.txt royal-mail-note-blocker/
+        cp LICENSE royal-mail-note-blocker/
+        cp uninstall.php royal-mail-note-blocker/
+        cp index.php royal-mail-note-blocker/
+        
+    - name: Create zip file
+      run: |
+        zip -r royal-mail-note-blocker-v${{ steps.version.outputs.version }}.zip royal-mail-note-blocker/
+        
+    - name: Upload build artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: royal-mail-note-blocker-v${{ steps.version.outputs.version }}
+        path: royal-mail-note-blocker-v${{ steps.version.outputs.version }}.zip
+        retention-days: 30
+        
+    - name: Upload to release
+      if: github.event_name == 'release'
+      uses: actions/upload-release-asset@v1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        upload_url: ${{ github.event.release.upload_url }}
+        asset_path: ./royal-mail-note-blocker-v${{ steps.version.outputs.version }}.zip
+        asset_name: royal-mail-note-blocker-v${{ steps.version.outputs.version }}.zip
+        asset_content_type: application/zip
