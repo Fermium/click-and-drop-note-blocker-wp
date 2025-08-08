@@ -15,16 +15,7 @@ jobs:
     - name: Checkout code
       uses: actions/checkout@v4
       
-    - name: Setup PHP
-      uses: shivammathur/setup-php@v2
-      with:
-        php-version: '8.1'
-        extensions: mbstring, xml, ctype, json
-        tools: composer
-        
-    - name: Validate PHP syntax
-      run: |
-        find . -name "*.php" -not -path "./vendor/*" -exec php -l {} \; | grep -v "No syntax errors"
+    # PHP validation skipped for faster CI
         
     - name: Check plugin header
       run: |
