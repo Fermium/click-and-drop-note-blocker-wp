@@ -71,12 +71,25 @@ class Royal_Mail_Note_Blocker {
      * Block customer note emails if they contain Royal Mail keywords
      *
      * @param bool $enabled Whether the email is enabled
-     * @param WC_Order $order The order object
+     * @param mixed $order_or_email_id The order object (for customer_note) or email ID (for general email filter)
+     * @param WC_Order $order The order object (for general email filter)
      * @return bool
      */
-    public function maybe_block_email($enabled, $order) {
+    public function maybe_block_email($enabled, $order_or_email_id, $order = null) {
         if (!$enabled) {
             return false;
+        }
+        
+        // Handle different hook signatures
+        if ($order === null) {
+            // Called from woocommerce_email_enabled_customer_note (2 params)
+            $order = $order_or_email_id;
+        }
+        // else: Called from woocommerce_email_enabled (3 params)
+        
+        // Check if order object is valid
+        if (!$order || !method_exists($order, 'get_id')) {
+            return $enabled;
         }
         
         // Get the most recent note
