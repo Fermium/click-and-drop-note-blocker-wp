@@ -22,6 +22,15 @@ jobs:
         echo "version=$VERSION" >> $GITHUB_OUTPUT
         echo "Release version: $VERSION"
         
+    - name: Set plugin version from tag
+      run: |
+        # Update the version in the plugin header
+        sed -i "s/^.*Version: .*/ * Version: ${{ steps.tag_version.outputs.version }}/" royal-mail-note-blocker.php
+        # Update the version constant
+        sed -i "s/define('RMNB_VERSION', '[^']*');/define('RMNB_VERSION', '${{ steps.tag_version.outputs.version }}');/" royal-mail-note-blocker.php
+        # Update the stable tag in readme.txt
+        sed -i "s/^Stable tag: .*/Stable tag: ${{ steps.tag_version.outputs.version }}/" readme.txt
+        
     - name: Verify plugin version matches tag
       run: |
         PLUGIN_VERSION=$(grep "Version:" royal-mail-note-blocker.php | sed 's/.*Version: *\([0-9.]*\).*/\1/')
@@ -71,59 +80,27 @@ jobs:
         sha256sum royal-mail-note-blocker-src-${{ steps.tag_version.outputs.version }}.zip >> checksums.txt
         
     - name: Create Release
-      id: create_release
-      uses: actions/create-release@v1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: ${{ steps.tag_version.outputs.tag }}
-        release_name: Royal Mail Note Blocker ${{ steps.tag_version.outputs.version }}
-        body: |
-          ## Royal Mail Note Blocker v${{ steps.tag_version.outputs.version }}
-          
-          ### Installation
-          1. Download `royal-mail-note-blocker-${{ steps.tag_version.outputs.version }}.zip`
-          2. Upload to your WordPress site via Plugins > Add New > Upload Plugin
-          3. Activate and configure under Settings > Royal Mail Note Blocker
-          
-          ### Files
-          - `royal-mail-note-blocker-${{ steps.tag_version.outputs.version }}.zip` - Ready-to-install WordPress plugin
-          - `royal-mail-note-blocker-src-${{ steps.tag_version.outputs.version }}.zip` - Source code archive
-          - `checksums.txt` - SHA256 checksums for verification
-          
-          ### Requirements
-          - WordPress 5.0+
-          - WooCommerce 5.0+
-          - PHP 7.4+
-        draft: false
-        prerelease: false
-        
-    - name: Upload Plugin ZIP
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./royal-mail-note-blocker-${{ steps.tag_version.outputs.version }}.zip
-        asset_name: royal-mail-note-blocker-${{ steps.tag_version.outputs.version }}.zip
-        asset_content_type: application/zip
-        
-    - name: Upload Source ZIP
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./royal-mail-note-blocker-src-${{ steps.tag_version.outputs.version }}.zip
-        asset_name: royal-mail-note-blocker-src-${{ steps.tag_version.outputs.version }}.zip
-        asset_content_type: application/zip
-        
-    - name: Upload Checksums
-      uses: actions/upload-release-asset@v1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ./checksums.txt
-        asset_name: checksums.txt
-        asset_content_type: text/plain
+      run: |
+        gh release create ${{ steps.tag_version.outputs.tag }} \
+          --title "Royal Mail Note Blocker ${{ steps.tag_version.outputs.version }}" \
+          --notes "## Royal Mail Note Blocker v${{ steps.tag_version.outputs.version }}
+
+        ### Installation
+        1. Download \`royal-mail-note-blocker-${{ steps.tag_version.outputs.version }}.zip\`
+        2. Upload to your WordPress site via Plugins > Add New > Upload Plugin
+        3. Activate and configure under Settings > Royal Mail Note Blocker
+
+        ### Files
+        - \`royal-mail-note-blocker-${{ steps.tag_version.outputs.version }}.zip\` - Ready-to-install WordPress plugin
+        - \`royal-mail-note-blocker-src-${{ steps.tag_version.outputs.version }}.zip\` - Source code archive
+        - \`checksums.txt\` - SHA256 checksums for verification
+
+        ### Requirements
+        - WordPress 5.0+
+        - WooCommerce 5.0+
+        - PHP 7.4+" \
+          royal-mail-note-blocker-${{ steps.tag_version.outputs.version }}.zip \
+          royal-mail-note-blocker-src-${{ steps.tag_version.outputs.version }}.zip \
+          checksums.txt
