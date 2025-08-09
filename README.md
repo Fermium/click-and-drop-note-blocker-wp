@@ -133,4 +133,28 @@ This plugin is licensed under the GPL v2 or later.
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
-Wordpress plugin to intercept notes added by click&amp;drop and set them private before the email fires
+
+## Development & CI/CD
+
+This project includes automated CI/CD features:
+
+### Auto Version Bumping
+- Automatic patch version increments on commits to `main` branch
+- Updates version in plugin header, constants, and readme.txt
+- Creates git tags and triggers releases
+- Skip with `[skip version]` in commit message
+
+### Manual Version Management
+- Use "Sync Version" GitHub Action workflow to fix version inconsistencies
+- Can specify target version or sync to current plugin header version
+
+### Build Process
+- Automated builds with version validation
+- WordPress plugin zip creation
+- SHA256 checksums for releases
+
+### Version Detection
+The plugin includes dynamic version detection:
+```php
+$version = rmnb_get_version(); // Gets version from git tags in dev, constant in production
+```
