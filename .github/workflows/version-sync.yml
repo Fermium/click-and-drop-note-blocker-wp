@@ -1,0 +1,133 @@
+name: Sync Version
+
+on:
+  workflow_dispatch:
+    inputs:
+      target_version:
+        description: 'Target version (e.g., 1.2.3) - leave empty to use current plugin header version'
+        required: false
+        type: string
+
+jobs:
+  sync-version:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        
+    - name: Configure Git
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+    - name: Determine target version
+      id: target_version
+      run: |
+        if [ -n "${{ github.event.inputs.target_version }}" ]; then
+          TARGET_VERSION="${{ github.event.inputs.target_version }}"
+          echo "Using manually specified version: $TARGET_VERSION"
+        else
+          TARGET_VERSION=$(grep "Version:" royal-mail-note-blocker.php | sed 's/.*Version: *\([0-9.]*\).*/\1/')
+          echo "Using plugin header version: $TARGET_VERSION"
+        fi
+        
+        # Validate version format
+        if ! echo "$TARGET_VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+          echo "Invalid version format: $TARGET_VERSION"
+          exit 1
+        fi
+        
+        echo "target=$TARGET_VERSION" >> $GITHUB_OUTPUT
+        
+    - name: Check current versions
+      run: |
+        PLUGIN_VERSION=$(grep "Version:" royal-mail-note-blocker.php | sed 's/.*Version: *\([0-9.]*\).*/\1/')
+        CONSTANT_VERSION=$(grep "define('RMNB_VERSION'" royal-mail-note-blocker.php | sed "s/.*'\\([0-9.]*\\)'.*/\\1/")
+        README_VERSION=$(grep "Stable tag:" readme.txt | sed 's/.*Stable tag: *\([0-9.]*\).*/\1/')
+        
+        echo "Current versions:"
+        echo "  Plugin header: $PLUGIN_VERSION"
+        echo "  Plugin constant: $CONSTANT_VERSION"
+        echo "  Readme stable tag: $README_VERSION"
+        echo "Target version: ${{ steps.target_version.outputs.target }}"
+        
+    - name: Update all version references
+      run: |
+        TARGET_VERSION="${{ steps.target_version.outputs.target }}"
+        
+        # Get current versions for replacement
+        CURRENT_PLUGIN_VERSION=$(grep "Version:" royal-mail-note-blocker.php | sed 's/.*Version: *\([0-9.]*\).*/\1/')
+        CURRENT_CONSTANT_VERSION=$(grep "define('RMNB_VERSION'" royal-mail-note-blocker.php | sed "s/.*'\\([0-9.]*\\)'.*/\\1/")
+        CURRENT_README_VERSION=$(grep "Stable tag:" readme.txt | sed 's/.*Stable tag: *\([0-9.]*\).*/\1/')
+        
+        # Update plugin header
+        sed -i "s/Version: $CURRENT_PLUGIN_VERSION/Version: $TARGET_VERSION/" royal-mail-note-blocker.php
+        
+        # Update version constant
+        sed -i "s/define('RMNB_VERSION', '$CURRENT_CONSTANT_VERSION')/define('RMNB_VERSION', '$TARGET_VERSION')/" royal-mail-note-blocker.php
+        
+        # Update readme.txt stable tag
+        sed -i "s/Stable tag: $CURRENT_README_VERSION/Stable tag: $TARGET_VERSION/" readme.txt
+        
+        echo "Updated all versions to: $TARGET_VERSION"
+        
+    - name: Verify version consistency
+      run: |
+        TARGET_VERSION="${{ steps.target_version.outputs.target }}"
+        
+        # Check all version references
+        PLUGIN_VERSION=$(grep "Version:" royal-mail-note-blocker.php | sed 's/.*Version: *\([0-9.]*\).*/\1/')
+        CONSTANT_VERSION=$(grep "define('RMNB_VERSION'" royal-mail-note-blocker.php | sed "s/.*'\\([0-9.]*\\)'.*/\\1/")
+        README_VERSION=$(grep "Stable tag:" readme.txt | sed 's/.*Stable tag: *\([0-9.]*\).*/\1/')
+        
+        echo "After update:"
+        echo "  Plugin header: $PLUGIN_VERSION"
+        echo "  Plugin constant: $CONSTANT_VERSION"
+        echo "  Readme stable tag: $README_VERSION"
+        
+        # Verify all versions match target
+        if [ "$PLUGIN_VERSION" != "$TARGET_VERSION" ] || [ "$CONSTANT_VERSION" != "$TARGET_VERSION" ] || [ "$README_VERSION" != "$TARGET_VERSION" ]; then
+          echo "Version sync failed!"
+          echo "Expected: $TARGET_VERSION"
+          echo "Plugin header: $PLUGIN_VERSION"
+          echo "Constant: $CONSTANT_VERSION"
+          echo "Readme: $README_VERSION"
+          exit 1
+        fi
+        
+        echo "All versions successfully synced to: $TARGET_VERSION"
+        
+    - name: Check for changes
+      id: changes
+      run: |
+        if git diff --quiet; then
+          echo "has_changes=false" >> $GITHUB_OUTPUT
+          echo "No changes detected - versions were already in sync"
+        else
+          echo "has_changes=true" >> $GITHUB_OUTPUT
+          echo "Changes detected:"
+          git diff
+        fi
+        
+    - name: Commit and push changes
+      if: steps.changes.outputs.has_changes == 'true'
+      run: |
+        TARGET_VERSION="${{ steps.target_version.outputs.target }}"
+        
+        git add royal-mail-note-blocker.php readme.txt
+        git commit -m "Sync all versions to v$TARGET_VERSION [skip version]"
+        git push origin ${{ github.ref_name }}
+        
+        echo "Changes committed and pushed"
+        
+    - name: Summary
+      run: |
+        if [ "${{ steps.changes.outputs.has_changes }}" == "true" ]; then
+          echo "✅ Version sync completed successfully"
+          echo "All version references updated to: ${{ steps.target_version.outputs.target }}"
+        else
+          echo "ℹ️ No changes needed - all versions were already consistent"
+        fi

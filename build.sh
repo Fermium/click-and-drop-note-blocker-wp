@@ -53,6 +53,18 @@ if [ -z "$VERSION" ]; then
     exit 1
 fi
 
+# Verify version consistency across files
+CONSTANT_VERSION=$(grep "define('RMNB_VERSION'" royal-mail-note-blocker.php | sed "s/.*'\\([0-9.]*\\)'.*/\\1/")
+README_VERSION=$(grep "Stable tag:" readme.txt | sed 's/.*Stable tag: *\([0-9.]*\).*/\1/')
+
+if [ "$VERSION" != "$CONSTANT_VERSION" ] || [ "$VERSION" != "$README_VERSION" ]; then
+    print_warning "Version inconsistency detected:"
+    print_warning "  Plugin header: $VERSION"
+    print_warning "  Plugin constant: $CONSTANT_VERSION"
+    print_warning "  Readme stable tag: $README_VERSION"
+    print_warning "Consider running the version sync workflow or update manually"
+fi
+
 print_status "Plugin version: $VERSION"
 
 # Create build directory

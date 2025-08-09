@@ -28,6 +28,35 @@ define('RMNB_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('RMNB_PLUGIN_URL', plugin_dir_url(__FILE__));
 
 /**
+ * Get plugin version dynamically
+ * First tries to get from git tag if available, falls back to constant
+ *
+ * @return string Plugin version
+ */
+function rmnb_get_version() {
+    // Try to get version from git tag in development environment
+    if (defined('WP_DEBUG') && WP_DEBUG && function_exists('exec')) {
+        $git_version = null;
+        $git_dir = RMNB_PLUGIN_DIR . '.git';
+        
+        if (is_dir($git_dir)) {
+            // Try to get latest tag
+            exec('cd ' . escapeshellarg(RMNB_PLUGIN_DIR) . ' && git describe --tags --abbrev=0 2>/dev/null', $output, $return_code);
+            if ($return_code === 0 && !empty($output[0])) {
+                $git_version = ltrim($output[0], 'v');
+                // Validate version format
+                if (preg_match('/^\d+\.\d+\.\d+$/', $git_version)) {
+                    return $git_version;
+                }
+            }
+        }
+    }
+    
+    // Fall back to constant
+    return RMNB_VERSION;
+}
+
+/**
  * Main plugin class
  */
 class Royal_Mail_Note_Blocker {

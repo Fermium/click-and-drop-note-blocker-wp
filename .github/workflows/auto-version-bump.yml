@@ -1,0 +1,131 @@
+name: Auto Version Bump
+
+on:
+  push:
+    branches: [ main ]
+    paths-ignore:
+      - 'README.md'
+      - '.github/workflows/auto-version-bump.yml'
+      - 'build/**'
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    if: "!contains(github.event.head_commit.message, '[skip version]')"
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+        fetch-depth: 0
+        
+    - name: Configure Git
+      run: |
+        git config --local user.email "action@github.com"
+        git config --local user.name "GitHub Action"
+        
+    - name: Get current version
+      id: current_version
+      run: |
+        CURRENT_VERSION=$(grep "Version:" royal-mail-note-blocker.php | sed 's/.*Version: *\([0-9.]*\).*/\1/')
+        echo "current=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        echo "Current version: $CURRENT_VERSION"
+        
+    - name: Calculate new version
+      id: new_version
+      run: |
+        CURRENT="${{ steps.current_version.outputs.current }}"
+        
+        # Split version into parts
+        IFS='.' read -ra VERSION_PARTS <<< "$CURRENT"
+        MAJOR=${VERSION_PARTS[0]}
+        MINOR=${VERSION_PARTS[1]}
+        PATCH=${VERSION_PARTS[2]}
+        
+        # Increment patch version
+        NEW_PATCH=$((PATCH + 1))
+        NEW_VERSION="$MAJOR.$MINOR.$NEW_PATCH"
+        
+        echo "new=$NEW_VERSION" >> $GITHUB_OUTPUT
+        echo "New version: $NEW_VERSION"
+        
+    - name: Check if tag already exists
+      id: check_tag
+      run: |
+        if git rev-parse "v${{ steps.new_version.outputs.new }}" >/dev/null 2>&1; then
+          echo "exists=true" >> $GITHUB_OUTPUT
+          echo "Tag v${{ steps.new_version.outputs.new }} already exists"
+        else
+          echo "exists=false" >> $GITHUB_OUTPUT
+          echo "Tag v${{ steps.new_version.outputs.new }} does not exist"
+        fi
+        
+    - name: Update plugin version
+      if: steps.check_tag.outputs.exists == 'false'
+      run: |
+        NEW_VERSION="${{ steps.new_version.outputs.new }}"
+        
+        # Update main plugin file header
+        sed -i "s/Version: ${{ steps.current_version.outputs.current }}/Version: $NEW_VERSION/" royal-mail-note-blocker.php
+        
+        # Update version constant
+        sed -i "s/define('RMNB_VERSION', '${{ steps.current_version.outputs.current }}')/define('RMNB_VERSION', '$NEW_VERSION')/" royal-mail-note-blocker.php
+        
+        # Update readme.txt stable tag
+        sed -i "s/Stable tag: .*/Stable tag: $NEW_VERSION/" readme.txt
+        
+        echo "Updated version to: $NEW_VERSION"
+        
+    - name: Verify version consistency
+      if: steps.check_tag.outputs.exists == 'false'
+      run: |
+        NEW_VERSION="${{ steps.new_version.outputs.new }}"
+        
+        # Check plugin header
+        PLUGIN_VERSION=$(grep "Version:" royal-mail-note-blocker.php | sed 's/.*Version: *\([0-9.]*\).*/\1/')
+        
+        # Check version constant
+        CONSTANT_VERSION=$(grep "define('RMNB_VERSION'" royal-mail-note-blocker.php | sed "s/.*'\\([0-9.]*\\)'.*/\\1/")
+        
+        # Check readme stable tag
+        README_VERSION=$(grep "Stable tag:" readme.txt | sed 's/.*Stable tag: *\([0-9.]*\).*/\1/')
+        
+        echo "Plugin header version: $PLUGIN_VERSION"
+        echo "Constant version: $CONSTANT_VERSION"
+        echo "Readme version: $README_VERSION"
+        
+        if [ "$PLUGIN_VERSION" != "$NEW_VERSION" ] || [ "$CONSTANT_VERSION" != "$NEW_VERSION" ] || [ "$README_VERSION" != "$NEW_VERSION" ]; then
+          echo "Version mismatch detected!"
+          echo "Expected: $NEW_VERSION"
+          echo "Plugin header: $PLUGIN_VERSION"
+          echo "Constant: $CONSTANT_VERSION"
+          echo "Readme: $README_VERSION"
+          exit 1
+        fi
+        
+        echo "All versions are consistent: $NEW_VERSION"
+        
+    - name: Commit version changes
+      if: steps.check_tag.outputs.exists == 'false'
+      run: |
+        NEW_VERSION="${{ steps.new_version.outputs.new }}"
+        
+        git add royal-mail-note-blocker.php readme.txt
+        git commit -m "Bump version to v$NEW_VERSION [skip version]"
+        
+    - name: Create and push tag
+      if: steps.check_tag.outputs.exists == 'false'
+      run: |
+        NEW_VERSION="${{ steps.new_version.outputs.new }}"
+        
+        git tag -a "v$NEW_VERSION" -m "Release version v$NEW_VERSION"
+        git push origin main
+        git push origin "v$NEW_VERSION"
+        
+        echo "Created and pushed tag: v$NEW_VERSION"
+        
+    - name: Skip version bump
+      if: steps.check_tag.outputs.exists == 'true'
+      run: |
+        echo "Skipping version bump - tag v${{ steps.new_version.outputs.new }} already exists"
